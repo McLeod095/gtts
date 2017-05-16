@@ -75,9 +75,10 @@ type Phrase struct {
 
 type TTS struct {
 	Speed float64
+	Text	string
 	Phrases []Phrase
 	Token *token.GttsToken
-	Cache *cache.Cache
+	Cache cache.Cache
 }
 
 func splitText(text string) []Phrase {
@@ -161,11 +162,11 @@ func checkLang(letter rune) string {
 //	return "en"
 //}
 
-func New(text string, speed float64, c *cache.Cache) (*TTS, error) {
+func New(text string, speed float64, c cache.Cache) (*TTS, error) {
 	if speed < 0 || speed > 2 {
 		return nil, fmt.Errorf("Speed [%f] not supported", speed)
 	}
-	t := &TTS{Speed: speed, Phrases: splitText(text), Cache: c}
+	t := &TTS{Text: text, Speed: speed, Phrases: splitText(text), Cache: c}
 	tkn, err := token.New()
 	if err != nil {
 		return nil, err
@@ -209,21 +210,26 @@ func (t *TTS) speech(p Phrase, length int, index int) ([]byte, error) {
 }
 
 func (t *TTS) ToSpeech() (string, error) {
+	if t.Cache.Exists(t.Text) {
+		return t.Cache.GetName(t.Text), nil
+	}
 	var mp3 []byte
 	for index, phrase := range t.Phrases {
-		body, err := t.speech(phrase, len(t.Phrases), index)
-		if err != nil {
-			return "", err
+		var body []byte
+		var err error
+		if t.Cache.Exists(phrase.Text) {
+			body, err = t.Cache.Get(phrase.Text)
+			if err != nil {
+				return "", err
+			}
+		}else{
+			body, err = t.speech(phrase, len(t.Phrases), index)
+			if err != nil {
+				return "", err
+			}
+			t.Cache.Set(phrase.Text,body)
 		}
 		mp3 = append(mp3, body...)
 	}
-	tmpfile, err := ioutil.TempFile("","mp3")
-	if err != nil {
-		return "", err
-	}
-	if _, err = tmpfile.Write(mp3); err != nil {
-		return "", err
-	}
-
-	return tmpfile.Name(), nil
+	return t.Cache.Set(t.Text,mp3)
 }

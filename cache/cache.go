@@ -7,8 +7,9 @@ import (
 )
 
 type Cache interface {
-	Set(string, []byte) error
+	Set(string, []byte) (string, error)
 	Get(string) ([]byte, error)
+	GetName(string) string
 	Exists(string) bool
 }
 
@@ -47,10 +48,14 @@ func (c cache) Exists(key string) bool {
 	return false
 }
 
-func (c cache) Set(key string, data []byte) error {
-	return ioutil.WriteFile(c.path(key), data, os.ModePerm)
+func (c cache) Set(key string, data []byte) (string, error) {
+	return c.path(key), ioutil.WriteFile(c.path(key), data, 0644)
 }
 
 func (c cache) Get(key string) ([]byte, error) {
 	return ioutil.ReadFile(c.path(key))
+}
+
+func (c cache) GetName(key string) string {
+	return c.path(key)
 }

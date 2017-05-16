@@ -1,13 +1,16 @@
 package main
 
 import (
-//	"log"
-//	"gtts/tts"
-//	"fmt"
+	"log"
 	"gtts/cache"
 	"fmt"
 	"crypto/md5"
 	"encoding/hex"
+	"gtts/tts"
+	"os"
+	"strings"
+	"io/ioutil"
+	"path"
 )
 
 func NameConvert(text string) string {
@@ -18,20 +21,48 @@ func NameConvert(text string) string {
 }
 
 func main() {
-	text := "Привет, у нас проблема! PROBLEM at app01.tema: OPR.VK.CPA.171400.SubmitSMresp.LagTooLong (1s 276ms)"
-	//t, err := tts.New(text,1)
-	//if err != nil {
-	//	log.Panicln(err)
-	//}
-	//filename, err := t.ToSpeech()
-	//if err != nil {
-	//	log.Panicln(err)
-	//}
-	fcache, err := cache.New("/var/tmp/asterisk", NameConvert)
-	if err != nil {
-		fmt.Println(err)
+	if len(os.Args) < 3 {
+		os.Exit(1)
 	}
 
-	fmt.Println(fcache.Get(text))
-	fmt.Println(text)
+	number := os.Args[1]
+	text := os.Args[2]
+
+	if ! strings.Contains(text, "PROBLEM") {
+		os.Exit(1)
+	}
+
+	fcache, err := cache.New("/tmp/asterisk/sounds", NameConvert)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	t, err := tts.New(text,1, fcache)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	filename, err := t.ToSpeech()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	tmpcall, err := ioutil.TempFile(os.TempDir(), "zabbix_call")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer os.Remove(tmpcall.Name())
+
+	content := "Channel:Local/" + number + "@office-asterisk\nContext:office-asterisk\nWaitTime:60\nCallerID:zabbix\nApplication:playback\nData:" + filename + "&" + filename + "&" + filename + "\nSet: ALARM_TEXT=\"" + text + "\""
+
+	if _, err := tmpcall.Write([]byte(content)); err != nil {
+		log.Fatalln(err)
+	}
+	if err := tmpcall.Close(); err != nil {
+		log.Fatalln(err)
+	}
+	err = os.Rename(tmpcall.Name(), path.Join("/tmp/asterisk/outgoing", path.Base(tmpcall.Name()) + ".call"))
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
