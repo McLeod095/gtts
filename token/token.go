@@ -15,13 +15,12 @@ var SALT_2 = "+-3^+b+-f"
 
 var GttsUrl = "https://translate.google.com/"
 
-type Gtts struct {
+type GttsToken struct {
 	first_seed  int64
 	second_seed int64
 }
 
-//func (g *Gtts)calculate_token(text string) (int64, int64) {
-func (g *Gtts) Calculate_token(text string) string {
+func (g *GttsToken) Calculate_token(text string) string {
 	a := g.first_seed
 	for i := 0; i < len(text); i++ {
 		a += int64(text[i])
@@ -33,7 +32,6 @@ func (g *Gtts) Calculate_token(text string) string {
 		a = (a & 2147483647) + 2147483648
 	}
 	a %= 1E6
-	//return a, a ^ g.first_seed
 	return strings.Join([]string{strconv.FormatInt(a,10), strconv.FormatInt(a ^ g.first_seed, 10)}, ".")
 }
 
@@ -71,35 +69,43 @@ func work_token(a int64, seed string) int64 {
 	return a
 }
 
-func New() Gtts {
-	g := Gtts{}
-	//if err := g.get_token(); err != nil {
-	//	return nil
-	//}
-	return g
+func New() (*GttsToken, error) {
+	g := &GttsToken{}
+	if err := g.get_token(); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
-func (g *Gtts) get_token() error {
+func (g *GttsToken) get_token() error {
 	g.first_seed = int64(time.Now().Unix() / 3600)
-
-	resp, err := http.Get(GttsUrl)
+	t, err := request_token()
 	if err != nil {
 		return err
+	}
+	g.second_seed = t
+	return nil
+}
+
+func request_token() (int64, error) {
+	resp, err := http.Get(GttsUrl)
+	if err != nil {
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	bodystr := string(body)
 	a_start := strings.Index(bodystr, "a\\x3d")
 	if a_start < 0 {
-		return fmt.Errorf("Cannot find a\\x3d")
+		return 0, fmt.Errorf("Cannot find a\\x3d")
 	}
 	b_start := strings.Index(bodystr, "b\\x3d")
 	if b_start < 0 {
-		return fmt.Errorf("Cannot find b\\x3d")
+		return 0, fmt.Errorf("Cannot find b\\x3d")
 	}
 	a_stop := strings.Index(bodystr[a_start:], ";")
 	b_stop := strings.Index(bodystr[b_start:], ";")
@@ -107,12 +113,11 @@ func (g *Gtts) get_token() error {
 	b_str := bodystr[b_start+5:b_start+b_stop]
 	a, err := strconv.Atoi(a_str)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	b, err := strconv.Atoi(b_str)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	g.second_seed = int64(a+b)
-	return nil
+	return int64(a+b), nil
 }
