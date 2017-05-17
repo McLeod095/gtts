@@ -53,11 +53,17 @@ func main() {
 	}
 	defer os.Remove(tmpcall.Name())
 
-	content := "Channel:Local/" + number + "@office-asterisk\nContext:office-asterisk\nWaitTime:60\nCallerID:zabbix\nApplication:playback\nData:" + filename + "&" + filename + "&" + filename + "\nSet: ALARM_TEXT=\"" + text + "\""
+	cfilename := strings.TrimSuffix(path.Base(filename), path.Ext(filename))
+	content := "Channel:Local/" + number + "@office-asterisk\nContext:office-asterisk\nWaitTime:60\nCallerID:zabbix\nApplication:playback\nData:" + cfilename + "&" + cfilename + "&" + cfilename + "\nSet: ALARM_TEXT=\"" + text + "\""
 
 	if _, err := tmpcall.Write([]byte(content)); err != nil {
 		log.Fatalln(err)
 	}
+
+	if err := tmpcall.Chmod(0666); err != nil {
+		log.Fatalln(err)
+	}
+
 	if err := tmpcall.Close(); err != nil {
 		log.Fatalln(err)
 	}
